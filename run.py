@@ -5,6 +5,10 @@ from flask import request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
+from flask import request, jsonify
+from sqlalchemy import CheckConstraint
+from sqlalchemy.exc import IntegrityError
+
 
 #1. conifguration boilorplate code
 app.config["SECRET_KEY"] = "dev-only-change-later"
@@ -38,16 +42,23 @@ class User(UserMixin, db.Model):
 
 #4. Create Inventory model
 class Inventory(db.Model):
+    __table_args__ = (
+        CheckConstraint("length(trim(itemName)) > 0", name="ck_inventory_itemname_not_empty"),
+    )  
     id = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     itemName = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     restockmin = db.Column(db.Integer)
     restockmax = db.Column(db.Integer)
-
     description = db.Column(db.Text)
+#5. a
+class SharedInventory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ownersID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    sharedID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    permissionLevel = db.Column(db.String(20), nullable=False)
 
- 
 
 
 @login_manager.user_loader
@@ -74,7 +85,7 @@ def register():
         return redirect(url_for("login"))
 
     return render_template("register.html")
-
+#5. add routes for basic functionlaity
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -84,7 +95,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             login_user(user)
-            return redirect(url_for("whoami"))
+            return redirect(url_for("inventory_page"))
 
         return "Invalid credentials", 401
 
@@ -105,7 +116,175 @@ def home():
 @login_required
 def whoami():
     return f"Logged in as: {current_user.username}"
+
            
+@app.route("/add_row", methods=["POST"])
+@login_required
+def add_row():
+    data = request.get_json()
+
+    item_name = data[2].strip()
+    if not item_name:
+     return jsonify({"error": "Item name required"}), 400
+    quantity = int(data[3])
+    restockmin = int(data[4]) if data[4] else None
+    description = data[5]
+    
+
+    item = Inventory(
+        userID=current_user.id,
+        itemName=item_name,
+        quantity=quantity,
+        restockmin=restockmin,
+        description=description
+    )
+
+    db.session.add(item)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid data"}), 400
+        
+    return jsonify({"status": "ok"}), 201
+
+
+@app.route("/getUserInventory", methods=["GET"])
+@login_required
+def get_user_inventory():
+    items = Inventory.query.filter_by(userID=current_user.id).all()
+
+    inventory_list = []
+    for item in items:
+        inventory_list.append({
+            "id": item.id,
+            "itemName": item.itemName,
+            "quantity": item.quantity,
+            "restock": item.restockmin,
+            "description": item.description
+        })
+
+    return jsonify({"user_inventory": inventory_list}), 200
+
+@app.route("/inventory")
+@login_required
+def inventory_page():
+    return render_template("index.html", username=current_user.username)
+
+@app.route("/edit_row", methods=["PUT"])
+@login_required
+def edit_row():
+    data = request.get_json()
+
+    item_id = int(data[0])
+    item = Inventory.query.get(item_id)
+    
+    if item is None:
+        return jsonify({"error": "Item not found"}), 404
+
+    # Authorization check: user can only edit their own items
+    if item.userID != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    item.itemName = data[2].strip()
+    if not item.itemName:
+     return jsonify({"error": "Item name required"}), 400
+    item.quantity = int(data[3])
+    item.restockmin = int(data[4]) if data[4] else None
+    item.description = data[5]
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid data"}), 400
+    return jsonify({"status": "ok"}), 200
+
+#5.b sharing inventory
+@app.route("/sharedinv")
+@login_required
+def shared_inventory_page():
+    currentuserid = current_user.id
+    shares = SharedInventory.query.filter_by(sharedID=currentuserid).all()
+
+    shared_inventories_data = {}
+
+    for share in shares:
+        owner = User.query.get(share.ownersID)
+        if not owner:
+            continue
+
+        items = Inventory.query.filter_by(userID=share.ownersID).all()
+        shared_inventories_data[owner.username] = items
+
+    return render_template("shared_inventory.html", shared_inventories=shared_inventories_data)
+#6 share invenotry
+@app.route("/share_inv", methods=["POST"])
+@login_required
+def share_inv():
+    data = request.get_json()
+    username_to_share = (data or "").strip()
+
+    if not username_to_share:
+        return jsonify({"error": "Username required"}), 400
+
+    user_to_share = User.query.filter_by(username=username_to_share).first()
+    if not user_to_share:
+        return jsonify({"error": "User not found"}), 404
+
+    if user_to_share.id == current_user.id:
+        return jsonify({"error": "Cannot share with yourself"}), 400
+
+    existing = SharedInventory.query.filter_by(
+        ownersID=current_user.id,
+        sharedID=user_to_share.id
+    ).first()
+    if existing:
+        return jsonify({"error": "Already shared"}), 400
+
+    newshare = SharedInventory(
+        ownersID=current_user.id,
+        sharedID=user_to_share.id,
+        permissionLevel="Edit"
+    )
+    db.session.add(newshare)
+    db.session.commit()
+
+    return jsonify({"status": "ok"}), 201
+
+#6b edit shared inv
+@app.route("/edit_shared_row", methods=["PUT"])
+@login_required
+def edit_shared_row():
+    data = request.get_json()
+    item_id = int(data[0])
+
+    item = Inventory.query.get(item_id)
+    if not item:
+        return jsonify({"error": "Item not found"}), 404
+
+    # If owner → allow
+    if item.userID == current_user.id:
+        pass
+    else:
+        share = SharedInventory.query.filter_by(
+            ownersID=item.userID,
+            sharedID=current_user.id
+        ).first()
+
+        if not share or share.permissionLevel != "Edit":
+            return jsonify({"error": "Forbidden"}), 403
+
+    # Now safe to edit
+    item.itemName = data[1].strip()
+    try:
+        item.quantity = int(data[2])
+    except:
+        return jsonify({"error": "Quantity must be integer"}), 400
+
+    db.session.commit()
+    return jsonify({"status": "ok"}), 200
+
 
 if __name__ == "__main__":
     with app.app_context():

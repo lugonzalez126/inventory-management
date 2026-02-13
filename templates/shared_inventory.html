@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>Shared Inventory</h1>
+
+    {% if not shared_inventories %}
+      <p>No inventories have been shared with you.</p>
+    {% endif %}
+
+    {% for owner_name, items in shared_inventories.items() %}
+      <h2>From: {{ owner_name }}</h2>
+
+      <table border="1">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Restock Min</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+        <tr>
+            <td>{{ item.id }}</td>
+            <td contenteditable="true">{{ item.itemName }}</td>
+            <td contenteditable="true">{{ item.quantity }}</td>
+            <td>{{ item.restockmin }}</td>
+            <td>{{ item.description }}</td>
+            <td><button onclick="editSharedRow(this)">Push Changes</button></td>
+        </tr>
+
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+
+    <script>
+        function editSharedRow(button) {
+        var row = button.parentNode.parentNode;
+        var cells = row.getElementsByTagName("td");
+        var rowData = Array.from(cells).map(cell => cell.innerText);
+
+        fetch('/edit_shared_row', {
+            method: 'PUT',
+            body: JSON.stringify(rowData),
+            headers: { 'Content-Type': 'application/json' }
+        }).then(res => {
+            if (!res.ok) alert("Edit failed");
+        });
+        }
+    </script>
+
+  </body>
+</html>

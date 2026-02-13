@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>Inventory</h1>
+    <p>Logged in as: {{ username }}</p>
+    <p id="msg" style="color: red;"></p>
+
+    <div>
+      <input id="shareInv" placeholder="Username to share with" />
+      <button onclick="share()">Share</button>
+      <p id="shareMsg" style="color: red;"></p>
+    </div>
+
+    <table border="1" id="inventoryTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User</th>
+          <th>Item</th>
+          <th>Qty</th>
+          <th>Restock Min</th>
+          <th>Description</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+
+      <tbody id="invtable">
+        <tr id="editableRow">
+          <td><button class="addrow" onclick="submitData()">Submit</button></td>
+          <td>{{ username }}</td>
+          <td contenteditable="true"></td>
+          <td contenteditable="true"></td>
+          <td contenteditable="true"></td>
+          <td contenteditable="true"></td>
+          <td>N/A</td>
+        </tr>
+      </tbody>
+
+    </table>
+
+    <script>
+      function setShareMsg(text) {
+        document.getElementById("shareMsg").innerText = text || "";
+      }
+
+      function share() {
+        setShareMsg("");
+        const shareUser = document.getElementById('shareInv').value;
+
+        fetch('/share_inv', {
+          method: 'POST',
+          body: JSON.stringify(shareUser),
+          headers: { 'Content-Type': 'application/json' }
+        }).then(async (res) => {
+          let payload = null;
+          try { payload = await res.json(); } catch { payload = null; }
+
+          if (!res.ok) {
+            setShareMsg(payload?.error || "Share failed");
+            return;
+          }
+          setShareMsg("Shared successfully");
+        });
+      }
+
+            
+      // Get Data
+        let getInventory = () => {
+        fetch('/getUserInventory', { method: 'GET' })
+          .then(res => res.json())
+          .then(data => {
+            const parentElement = document.getElementById('invtable');
+
+            // remove all rows except the editable input row
+            const editableRow = document.getElementById('editableRow');
+            parentElement.innerHTML = '';
+            parentElement.appendChild(editableRow);
+
+            for (let key in data.user_inventory) {
+              const id = data.user_inventory[key]['id'];
+              const itemname = data.user_inventory[key]['itemName'];
+              const quantity = data.user_inventory[key]['quantity'];
+              const restock = data.user_inventory[key]['restock'];
+              const description = data.user_inventory[key]['description'];
+
+              const markup =
+                `<tr>
+                  <td>${id}</td>
+                  <td>{{ username }}</td>
+                  <td contenteditable="true">${itemname ?? ''}</td>
+                  <td contenteditable="true">${quantity ?? ''}</td>
+                  <td contenteditable="true">${restock ?? ''}</td>
+                  <td contenteditable="true">${description ?? ''}</td>
+                  <td><button onclick="editRow(this)">Push Changes</button></td>
+                </tr>`;
+
+              editableRow.insertAdjacentHTML('beforebegin', markup);
+            }
+          });
+      };
+
+        function setMsg(text) {
+            document.getElementById("msg").innerText = text || "";
+        }
+
+        function submitData() {
+            setMsg(""); // clear old message
+
+            const newRow = document.getElementById('editableRow');
+            const cells = newRow.getElementsByTagName('td');
+            const data = Array.from(cells).map(cell => cell.innerText);
+
+            fetch('/add_row', {
+                method: 'POST',
+                body: JSON.stringify(data),
+                headers: { 'Content-Type': 'application/json' }
+            }).then(async (res) => {
+                let payload = null;
+                try { payload = await res.json(); } catch { payload = null; }
+
+                if (!res.ok) {
+                    const msg = payload?.error || "Failed to add item";
+                    setMsg(msg);
+                    return;
+                    }
+
+                // reset input row on success
+                document.getElementById('editableRow').innerHTML =
+                    `<td><button class="addrow" onclick="submitData()">Submit</button></td>
+                    <td>{{ username }}</td>
+                    <td contenteditable="true"></td>
+                    <td contenteditable="true"></td>
+                    <td contenteditable="true"></td>
+                    <td contenteditable="true"></td>
+                    <td>N/A</td>`;
+
+                setMsg("Item added");
+                getInventory();
+            });
+            }
+
+      
+      // Make changes to the row
+      function editRow(button) {
+        var row = button.parentNode.parentNode;
+        var cells = row.getElementsByTagName("td");
+        var rowData = Array.from(cells).map(cell => cell.innerText);
+
+        fetch('/edit_row', {
+            method: 'PUT',
+            body: JSON.stringify(rowData),
+            headers: { 'Content-Type': 'application/json' }
+        }).then(async(res) =>{
+            let payload = null;
+            try { payload = await res.json(); } catch { payload = null; }
+
+            if (!res.ok) {
+                const msg = payload?.error || "Failed to add item";
+                setMsg(msg);
+                return;
+                }   
+            });
+        }
+
+
+      // load on page open
+      getInventory();
+    </script>
+  </body>
+</html>
