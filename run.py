@@ -117,18 +117,18 @@ def home():
 def whoami():
     return f"Logged in as: {current_user.username}"
 
-           
+#7. adding payloads     
 @app.route("/add_row", methods=["POST"])
 @login_required
 def add_row():
-    data = request.get_json()
+    payload = request.get_json()
 
-    item_name = data[2].strip()
+    item_name = payload.get("itemName") or {}
     if not item_name:
      return jsonify({"error": "Item name required"}), 400
-    quantity = int(data[3])
-    restockmin = int(data[4]) if data[4] else None
-    description = data[5]
+    quantity = int(payload.get("quantity"))
+    restockmin = int(payload.get("restockmin") or {})
+    description = payload.get("description") or {}
     
 
     item = Inventory(
@@ -200,7 +200,7 @@ def edit_row():
         return jsonify({"error": "Invalid data"}), 400
     return jsonify({"status": "ok"}), 200
 
-#5.b sharing inventory
+#5.inventory
 @app.route("/sharedinv")
 @login_required
 def shared_inventory_page():
