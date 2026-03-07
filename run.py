@@ -8,6 +8,7 @@ app = Flask(__name__)
 from flask import request, jsonify
 from sqlalchemy import CheckConstraint
 from sqlalchemy.exc import IntegrityError
+from validators import parse_inventory_payload
 
 
 #1. conifguration boilorplate code
@@ -121,22 +122,19 @@ def whoami():
 @app.route("/add_row", methods=["POST"])
 @login_required
 def add_row():
-    payload = request.get_json()
+    payload = request.get_json() or {}
 
-    item_name = payload.get("itemName") or {}
-    if not item_name:
-     return jsonify({"error": "Item name required"}), 400
-    quantity = int(payload.get("quantity"))
-    restockmin = int(payload.get("restockmin") or {})
-    description = payload.get("description") or {}
-    
+    try:
+        data = parse_inventory_payload(payload)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     item = Inventory(
         userID=current_user.id,
-        itemName=item_name,
-        quantity=quantity,
-        restockmin=restockmin,
-        description=description
+        itemName=data["itemName"],
+        quantity=data["quantity"],
+        restockmin=data["restockmin"],
+        description=data["description"]
     )
 
     db.session.add(item)
@@ -145,8 +143,8 @@ def add_row():
     except IntegrityError:
         db.session.rollback()
         return jsonify({"error": "Invalid data"}), 400
-        
-    return jsonify({"status": "ok"}), 201
+
+    return jsonify({"status": "ok", "id": item.id}), 201
 
 
 @app.route("/getUserInventory", methods=["GET"])
@@ -174,30 +172,38 @@ def inventory_page():
 @app.route("/edit_row", methods=["PUT"])
 @login_required
 def edit_row():
-    data = request.get_json()
+    payload = request.get_json() or {}
 
-    item_id = int(data[0])
+    try:
+        data = parse_inventory_payload(payload)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    item_id_raw = payload.get("itemid")
+    try:
+        item_id = int(item_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid item id"}), 400
+
     item = Inventory.query.get(item_id)
-    
+
     if item is None:
         return jsonify({"error": "Item not found"}), 404
 
-    # Authorization check: user can only edit their own items
     if item.userID != current_user.id:
         return jsonify({"error": "Forbidden"}), 403
 
-    item.itemName = data[2].strip()
-    if not item.itemName:
-     return jsonify({"error": "Item name required"}), 400
-    item.quantity = int(data[3])
-    item.restockmin = int(data[4]) if data[4] else None
-    item.description = data[5]
+    item.itemName = data["itemName"]
+    item.quantity = data["quantity"]
+    item.restockmin = data["restockmin"]
+    item.description = data["description"]
 
     try:
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
         return jsonify({"error": "Invalid data"}), 400
+
     return jsonify({"status": "ok"}), 200
 
 #5.inventory
@@ -256,8 +262,18 @@ def share_inv():
 @app.route("/edit_shared_row", methods=["PUT"])
 @login_required
 def edit_shared_row():
-    data = request.get_json()
-    item_id = int(data[0])
+    payload = request.get_json() or {}
+    try:
+        data = parse_inventory_payload(payload)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    item_id_raw = (payload.get("itemid"))
+    try:
+        item_id = int(item_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid item id"}), 400
+        
 
     item = Inventory.query.get(item_id)
     if not item:
@@ -275,14 +291,17 @@ def edit_shared_row():
         if not share or share.permissionLevel != "Edit":
             return jsonify({"error": "Forbidden"}), 403
 
-    # Now safe to edit
-    item.itemName = data[1].strip()
-    try:
-        item.quantity = int(data[2])
-    except:
-        return jsonify({"error": "Quantity must be integer"}), 400
+        item.itemName = data["itemName"]
+        item.quantity = data["quantity"]
+        item.restockmin = data["restockmin"]
+        item.description = data["description"]
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid data"}), 400
+    
     return jsonify({"status": "ok"}), 200
 
 

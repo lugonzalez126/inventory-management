@@ -27,7 +27,7 @@
             <td contenteditable="true">{{ item.itemName }}</td>
             <td contenteditable="true">{{ item.quantity }}</td>
             <td>{{ item.restockmin }}</td>
-            <td>{{ item.description }}</td>
+            <td contenteditable="true">{{ item.description}}</td>
             <td><button onclick="editSharedRow(this)">Push Changes</button></td>
         </tr>
 
@@ -38,18 +38,34 @@
 
     <script>
         function editSharedRow(button) {
-        var row = button.parentNode.parentNode;
-        var cells = row.getElementsByTagName("td");
-        var rowData = Array.from(cells).map(cell => cell.innerText);
+            const row = button.parentNode.parentNode;
+            const cells = row.getElementsByTagName("td");
 
-        fetch('/edit_shared_row', {
-            method: 'PUT',
-            body: JSON.stringify(rowData),
-            headers: { 'Content-Type': 'application/json' }
-        }).then(res => {
-            if (!res.ok) alert("Edit failed");
-        });
+            const payload = {
+                itemid: (cells[0]?.innerText || "").trim(),
+                itemName: (cells[1]?.innerText || "").trim(),
+                quantity: (cells[2]?.innerText || "").trim(),
+                restockmin: (cells[3]?.innerText || "").trim(),
+                description: (cells[4]?.innerText || "").trim(),
+            };
+
+            fetch('/edit_shared_row', {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(async (res) => {
+                let data = null;
+                try { data = await res.json(); } catch { data = null; }
+
+                if (!res.ok) {
+                    alert(data?.error || "Failed to update shared item");
+                    return;
+                }
+
+            });
         }
+        
     </script>
 
   </body>

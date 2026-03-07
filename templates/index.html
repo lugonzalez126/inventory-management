@@ -108,23 +108,29 @@
 
             const newRow = document.getElementById('editableRow');
             const cells = newRow.getElementsByTagName('td');
-            const data = Array.from(cells).map(cell => cell.innerText);
+
+            const payload = {
+                itemName: (cells[2]?.innerText || "").trim(),
+                quantity: (cells[3]?.innerText || "").trim(),
+                restockmin: (cells[4]?.innerText || "").trim(),
+                description: (cells[5]?.innerText || "").trim(),
+            };
 
             fetch('/add_row', {
                 method: 'POST',
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
                 headers: { 'Content-Type': 'application/json' }
-            }).then(async (res) => {
-                let payload = null;
-                try { payload = await res.json(); } catch { payload = null; }
+            })
+            .then(async (res) => {
+                let data = null;
+                try { data = await res.json(); } catch { data = null; }
 
                 if (!res.ok) {
-                    const msg = payload?.error || "Failed to add item";
+                    const msg = data?.error || "Failed to add item";
                     setMsg(msg);
                     return;
-                    }
+                }
 
-                // reset input row on success
                 document.getElementById('editableRow').innerHTML =
                     `<td><button class="addrow" onclick="submitData()">Submit</button></td>
                     <td>{{ username }}</td>
@@ -137,30 +143,40 @@
                 setMsg("Item added");
                 getInventory();
             });
-            }
+        }
 
       
       // Make changes to the row
       function editRow(button) {
-        var row = button.parentNode.parentNode;
-        var cells = row.getElementsByTagName("td");
-        var rowData = Array.from(cells).map(cell => cell.innerText);
+          const row = button.parentNode.parentNode;
+          const cells = row.getElementsByTagName("td");
 
-        fetch('/edit_row', {
-            method: 'PUT',
-            body: JSON.stringify(rowData),
-            headers: { 'Content-Type': 'application/json' }
-        }).then(async(res) =>{
-            let payload = null;
-            try { payload = await res.json(); } catch { payload = null; }
+          const payload = {
+              itemid: (cells[0]?.innerText || "").trim(),
+              itemName: (cells[2]?.innerText || "").trim(),
+              quantity: (cells[3]?.innerText || "").trim(),
+              restockmin: (cells[4]?.innerText || "").trim(),
+              description: (cells[5]?.innerText || "").trim(),
+          };
 
-            if (!res.ok) {
-                const msg = payload?.error || "Failed to add item";
-                setMsg(msg);
-                return;
-                }   
-            });
-        }
+          fetch('/edit_row', {
+              method: 'PUT',
+              body: JSON.stringify(payload),
+              headers: { 'Content-Type': 'application/json' }
+          })
+          .then(async (res) => {
+              let data = null;
+              try { data = await res.json(); } catch { data = null; }
+
+              if (!res.ok) {
+                  const msg = data?.error || "Failed to update item";
+                  setMsg(msg);
+                  return;
+              }
+
+              setMsg("Item updated");
+          });
+      }
 
 
       // load on page open
