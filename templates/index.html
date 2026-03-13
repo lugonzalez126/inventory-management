@@ -1,186 +1,135 @@
 <!doctype html>
-<html>
-  <body>
-    <h1>Inventory</h1>
-    <p>Logged in as: {{ username }}</p>
-    <p id="msg" style="color: red;"></p>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory — Inventra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+</head>
+<body>
 
-    <div>
-      <input id="shareInv" placeholder="Username to share with" />
-      <button onclick="share()">Share</button>
-      <p id="shareMsg" style="color: red;"></p>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a class="navbar-brand" href="/inventory">Inventra</a>
+    <div class="navbar-actions">
+      <a href="/sharedinv" class="btn btn-ghost" style="font-size:13px; padding: 7px 14px;">Shared with me</a>
+      <span class="navbar-user">{{ username }}</span>
+      <a href="/logout" class="btn btn-ghost" style="font-size:13px; padding: 7px 14px;">Sign out</a>
+    </div>
+  </nav>
+
+  <!-- Page -->
+  <div class="page">
+
+    <!-- Header -->
+    <div class="page-header">
+      <div>
+        <h2>Your Inventory</h2>
+        <p style="margin-top: 4px; font-size: 14px;">Track and manage all your items</p>
+      </div>
+      <button class="btn btn-primary" onclick="openAddPanel()">+ Add item</button>
     </div>
 
-    <table border="1" id="inventoryTable">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>User</th>
-          <th>Item</th>
-          <th>Qty</th>
-          <th>Restock Min</th>
-          <th>Description</th>
-          <th>Action</th>
-        </tr>
-      </thead>
+    <!-- Stats Cards -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <span class="stat-label">Total Items</span>
+        <span class="stat-value" id="statTotal">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Total Quantity</span>
+        <span class="stat-value" id="statQty">—</span>
+      </div>
+      <div class="stat-card stat-card--warning" id="statLowCard">
+        <span class="stat-label">Low Stock</span>
+        <span class="stat-value" id="statLow">—</span>
+      </div>
+    </div>
 
-      <tbody id="invtable">
-        <tr id="editableRow">
-          <td><button class="addrow" onclick="submitData()">Submit</button></td>
-          <td>{{ username }}</td>
-          <td contenteditable="true"></td>
-          <td contenteditable="true"></td>
-          <td contenteditable="true"></td>
-          <td contenteditable="true"></td>
-          <td>N/A</td>
-        </tr>
-      </tbody>
+    <!-- Alert messages -->
+    <div class="alert alert-error" id="errorMsg"></div>
+    <div class="alert alert-success" id="successMsg"></div>
 
-    </table>
+    <!-- Share row -->
+    <div class="share-row">
+      <input id="shareInput" type="text" placeholder="Share inventory with username…" style="max-width: 280px;" />
+      <button class="btn btn-ghost" onclick="shareInventory()">Share</button>
+      <div class="alert alert-error" id="shareError" style="margin: 0; display:none;"></div>
+      <div class="alert alert-success" id="shareSuccess" style="margin: 0; display:none;"></div>
+    </div>
 
-    <script>
-      function setShareMsg(text) {
-        document.getElementById("shareMsg").innerText = text || "";
-      }
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Quantity</th>
+            <th>Restock Min</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="invBody">
+          <tr id="emptyRow">
+            <td colspan="6" style="text-align:center; color: var(--muted); padding: 40px;">
+              No items yet. Add your first item above.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-      function share() {
-        setShareMsg("");
-        const shareUser = document.getElementById('shareInv').value;
+  </div>
 
-        fetch('/share_inv', {
-          method: 'POST',
-          body: JSON.stringify(shareUser),
-          headers: { 'Content-Type': 'application/json' }
-        }).then(async (res) => {
-          let payload = null;
-          try { payload = await res.json(); } catch { payload = null; }
+  <!-- Slide-in Edit / Add Panel -->
+  <div class="panel-overlay" id="overlay" onclick="closePanel()"></div>
+  <div class="panel" id="panel">
+    <div class="panel-header">
+      <h3 id="panelTitle">Add item</h3>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
 
-          if (!res.ok) {
-            setShareMsg(payload?.error || "Share failed");
-            return;
-          }
-          setShareMsg("Shared successfully");
-        });
-      }
+    <div class="panel-body">
+      <div class="alert alert-error" id="panelError"></div>
 
-            
-      // Get Data
-        let getInventory = () => {
-        fetch('/getUserInventory', { method: 'GET' })
-          .then(res => res.json())
-          .then(data => {
-            const parentElement = document.getElementById('invtable');
+      <input type="hidden" id="panelItemId" />
 
-            // remove all rows except the editable input row
-            const editableRow = document.getElementById('editableRow');
-            parentElement.innerHTML = '';
-            parentElement.appendChild(editableRow);
+      <div class="field">
+        <label for="panelName">Item name</label>
+        <input id="panelName" type="text" placeholder="e.g. Laptop" required />
+      </div>
 
-            for (let key in data.user_inventory) {
-              const id = data.user_inventory[key]['id'];
-              const itemname = data.user_inventory[key]['itemName'];
-              const quantity = data.user_inventory[key]['quantity'];
-              const restock = data.user_inventory[key]['restock'];
-              const description = data.user_inventory[key]['description'];
+      <div class="field">
+        <label for="panelQty">Quantity</label>
+        <input id="panelQty" type="number" placeholder="0" min="0" required />
+      </div>
 
-              const markup =
-                `<tr>
-                  <td>${id}</td>
-                  <td>{{ username }}</td>
-                  <td contenteditable="true">${itemname ?? ''}</td>
-                  <td contenteditable="true">${quantity ?? ''}</td>
-                  <td contenteditable="true">${restock ?? ''}</td>
-                  <td contenteditable="true">${description ?? ''}</td>
-                  <td><button onclick="editRow(this)">Push Changes</button></td>
-                </tr>`;
+      <div class="field">
+        <label for="panelRestock">Restock minimum</label>
+        <input id="panelRestock" type="number" placeholder="e.g. 5" min="0" />
+        <span style="font-size:12px; color: var(--muted); margin-top:4px;">
+          We'll flag this item when quantity falls below this number
+        </span>
+      </div>
 
-              editableRow.insertAdjacentHTML('beforebegin', markup);
-            }
-          });
-      };
+      <div class="field">
+        <label for="panelDesc">Description</label>
+        <textarea id="panelDesc" rows="3" placeholder="Optional notes…"
+          style="resize:vertical; font-family:'Outfit',sans-serif; font-size:15px;
+                 padding:11px 14px; border:1px solid var(--border); border-radius:8px;
+                 background:var(--bg); color:var(--text); outline:none; width:100%;"></textarea>
+      </div>
+    </div>
 
-        function setMsg(text) {
-            document.getElementById("msg").innerText = text || "";
-        }
+    <div class="panel-footer">
+      <button class="btn btn-ghost" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-primary" id="panelSubmit" onclick="submitPanel()">Save item</button>
+    </div>
+  </div>
 
-        function submitData() {
-            setMsg(""); // clear old message
-
-            const newRow = document.getElementById('editableRow');
-            const cells = newRow.getElementsByTagName('td');
-
-            const payload = {
-                itemName: (cells[2]?.innerText || "").trim(),
-                quantity: (cells[3]?.innerText || "").trim(),
-                restockmin: (cells[4]?.innerText || "").trim(),
-                description: (cells[5]?.innerText || "").trim(),
-            };
-
-            fetch('/add_row', {
-                method: 'POST',
-                body: JSON.stringify(payload),
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(async (res) => {
-                let data = null;
-                try { data = await res.json(); } catch { data = null; }
-
-                if (!res.ok) {
-                    const msg = data?.error || "Failed to add item";
-                    setMsg(msg);
-                    return;
-                }
-
-                document.getElementById('editableRow').innerHTML =
-                    `<td><button class="addrow" onclick="submitData()">Submit</button></td>
-                    <td>{{ username }}</td>
-                    <td contenteditable="true"></td>
-                    <td contenteditable="true"></td>
-                    <td contenteditable="true"></td>
-                    <td contenteditable="true"></td>
-                    <td>N/A</td>`;
-
-                setMsg("Item added");
-                getInventory();
-            });
-        }
-
-      
-      // Make changes to the row
-      function editRow(button) {
-          const row = button.parentNode.parentNode;
-          const cells = row.getElementsByTagName("td");
-
-          const payload = {
-              itemid: (cells[0]?.innerText || "").trim(),
-              itemName: (cells[2]?.innerText || "").trim(),
-              quantity: (cells[3]?.innerText || "").trim(),
-              restockmin: (cells[4]?.innerText || "").trim(),
-              description: (cells[5]?.innerText || "").trim(),
-          };
-
-          fetch('/edit_row', {
-              method: 'PUT',
-              body: JSON.stringify(payload),
-              headers: { 'Content-Type': 'application/json' }
-          })
-          .then(async (res) => {
-              let data = null;
-              try { data = await res.json(); } catch { data = null; }
-
-              if (!res.ok) {
-                  const msg = data?.error || "Failed to update item";
-                  setMsg(msg);
-                  return;
-              }
-
-              setMsg("Item updated");
-          });
-      }
-
-
-      // load on page open
-      getInventory();
-    </script>
-  </body>
+  <script src="{{ url_for('static', filename='js/inventory.js') }}"></script>
+</body>
 </html>

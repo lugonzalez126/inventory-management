@@ -1,15 +1,66 @@
 <!doctype html>
-<html>
-  <body>
-    <h1>Register</h1>
-    <form method="POST">
-      <label>Username</label>
-      <input name="username" />
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account — Inventra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
 
-      <label>Password</label>
-      <input name="password" type="password" />
+  <div class="auth-wrap">
+    <div class="card auth-card fade-up">
 
-      <button type="submit">Create account</button>
-    </form>
-  </body>
+      <a class="auth-logo" href="/">Inventra</a>
+
+      <h1>Create account</h1>
+      <p style="margin-top: 8px; margin-bottom: 32px; font-size: 15px;">
+        Get started in seconds.
+      </p>
+
+      {% if error %}
+        <div class="alert alert-error show">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST">
+        <div class="field">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            placeholder="yourname"
+            autocomplete="username"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            placeholder="••••••••"
+            autocomplete="new-password"
+            required
+          />
+          <span style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+            Minimum 6 characters
+          </span>
+        </div>
+
+        <button class="btn btn-primary btn-full" type="submit" style="margin-top: 8px;">
+          Create account
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        Already have an account? <a href="/login">Sign in</a>
+      </div>
+
+    </div>
+  </div>
+
+</body>
 </html>

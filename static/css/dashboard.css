@@ -1,0 +1,195 @@
+/* =========================================
+   INVENTRA — Dashboard Styles
+   static/css/dashboard.css
+   ========================================= */
+
+/* ---- Stats Row ---- */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow);
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1;
+}
+
+.stat-card--warning .stat-value {
+  color: #b45309;
+}
+
+.stat-card--warning {
+  border-color: rgba(180,83,9,0.15);
+  background: rgba(254,243,199,0.4);
+}
+
+.stat-card--warning.hidden {
+  opacity: 0.4;
+}
+
+/* ---- Share Row ---- */
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* ---- Low stock row highlight ---- */
+tr.low-stock td {
+  background: rgba(254,243,199,0.5);
+}
+
+tr.low-stock:hover td {
+  background: rgba(254,243,199,0.7) !important;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.status-ok {
+  background: rgba(26,127,55,0.1);
+  color: #1a7f37;
+  border: 1px solid rgba(26,127,55,0.2);
+}
+
+.status-low {
+  background: rgba(180,83,9,0.1);
+  color: #b45309;
+  border: 1px solid rgba(180,83,9,0.2);
+}
+
+.status-na {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* ---- Slide-in Panel ---- */
+.panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.25);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+.panel-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.08);
+}
+
+.panel.open {
+  transform: translateX(0);
+}
+
+.panel-header {
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.panel-close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+.panel-footer {
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 640px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .navbar {
+    padding: 0 20px;
+  }
+
+  .page {
+    padding: 24px 16px;
+  }
+
+  .panel {
+    max-width: 100%;
+  }
+}

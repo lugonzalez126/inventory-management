@@ -1,72 +1,162 @@
 <!doctype html>
-<html>
-  <body>
-    <h1>Shared Inventory</h1>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shared Inventory — Inventra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a class="navbar-brand" href="/inventory">Inventra</a>
+    <div class="navbar-actions">
+      <a href="/inventory" class="btn btn-ghost" style="font-size:13px; padding: 7px 14px;">My Inventory</a>
+      <span class="navbar-user">{{ username }}</span>
+      <a href="/logout" class="btn btn-ghost" style="font-size:13px; padding: 7px 14px;">Sign out</a>
+    </div>
+  </nav>
+
+  <!-- Page -->
+  <div class="page">
+
+    <div class="page-header">
+      <div>
+        <h2>Shared with me</h2>
+        <p style="margin-top: 4px; font-size: 14px;">Inventories other users have shared with you</p>
+      </div>
+    </div>
+
+    <!-- Alert messages -->
+    <div class="alert alert-error" id="errorMsg"></div>
+    <div class="alert alert-success" id="successMsg"></div>
 
     {% if not shared_inventories %}
-      <p>No inventories have been shared with you.</p>
+      <div class="card" style="text-align: center; padding: 60px 40px;">
+        <p style="font-size: 15px;">No inventories have been shared with you yet.</p>
+        <a href="/inventory" style="display:inline-block; margin-top: 16px;" class="btn btn-ghost">
+          Back to my inventory
+        </a>
+      </div>
     {% endif %}
 
     {% for owner_name, items in shared_inventories.items() %}
-      <h2>From: {{ owner_name }}</h2>
+      <div style="margin-bottom: 40px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 16px;">
+          <h3>{{ owner_name }}'s inventory</h3>
+          <span class="badge">{{ items | length }} items</span>
+        </div>
 
-      <table border="1">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Item</th>
-            <th>Qty</th>
-            <th>Restock Min</th>
-            <th>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in items %}
-        <tr>
-            <td>{{ item.id }}</td>
-            <td contenteditable="true">{{ item.itemName }}</td>
-            <td contenteditable="true">{{ item.quantity }}</td>
-            <td>{{ item.restockmin }}</td>
-            <td contenteditable="true">{{ item.description}}</td>
-            <td><button onclick="editSharedRow(this)">Push Changes</button></td>
-        </tr>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Restock Min</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if not items %}
+                <tr>
+                  <td colspan="6" style="text-align:center; color:var(--muted); padding:32px;">
+                    This inventory is empty.
+                  </td>
+                </tr>
+              {% endif %}
 
-          {% endfor %}
-        </tbody>
-      </table>
+              {% for item in items %}
+                {% set is_low = item.restockmin and item.quantity < item.restockmin %}
+                <tr class="{{ 'low-stock' if is_low else '' }}">
+                  <td>{{ item.itemName }}</td>
+                  <td>{{ item.quantity }}</td>
+                  <td>{{ item.restockmin if item.restockmin else '—' }}</td>
+                  <td style="color:var(--muted); font-size:13px;">{{ item.description or '' }}</td>
+                  <td>
+                    {% if not item.restockmin %}
+                      <span class="status-badge status-na">—</span>
+                    {% elif is_low %}
+                      <span class="status-badge status-low">Low stock</span>
+                    {% else %}
+                      <span class="status-badge status-ok">In stock</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <button
+                      class="btn btn-ghost"
+                      style="font-size:12px; padding:5px 12px;"
+                      onclick="openEditPanel(
+                        {{ item.id }},
+                        '{{ item.itemName | replace("'", "\\'") }}',
+                        {{ item.quantity }},
+                        {{ item.restockmin if item.restockmin else 'null' }},
+                        '{{ (item.description or '') | replace("'", "\\'") }}'
+                      )">
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
     {% endfor %}
 
-    <script>
-        function editSharedRow(button) {
-            const row = button.parentNode.parentNode;
-            const cells = row.getElementsByTagName("td");
+  </div>
 
-            const payload = {
-                itemid: (cells[0]?.innerText || "").trim(),
-                itemName: (cells[1]?.innerText || "").trim(),
-                quantity: (cells[2]?.innerText || "").trim(),
-                restockmin: (cells[3]?.innerText || "").trim(),
-                description: (cells[4]?.innerText || "").trim(),
-            };
+  <!-- Slide-in Edit Panel -->
+  <div class="panel-overlay" id="overlay" onclick="closePanel()"></div>
+  <div class="panel" id="panel">
+    <div class="panel-header">
+      <h3>Edit item</h3>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
 
-            fetch('/edit_shared_row', {
-                method: 'PUT',
-                body: JSON.stringify(payload),
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(async (res) => {
-                let data = null;
-                try { data = await res.json(); } catch { data = null; }
+    <div class="panel-body">
+      <div class="alert alert-error" id="panelError"></div>
 
-                if (!res.ok) {
-                    alert(data?.error || "Failed to update shared item");
-                    return;
-                }
+      <input type="hidden" id="panelItemId" />
 
-            });
-        }
-        
-    </script>
+      <div class="field">
+        <label for="panelName">Item name</label>
+        <input id="panelName" type="text" placeholder="e.g. Laptop" required />
+      </div>
 
-  </body>
+      <div class="field">
+        <label for="panelQty">Quantity</label>
+        <input id="panelQty" type="number" placeholder="0" min="0" required />
+      </div>
+
+      <div class="field">
+        <label for="panelRestock">Restock minimum</label>
+        <input id="panelRestock" type="number" placeholder="e.g. 5" min="0" />
+        <span style="font-size:12px; color:var(--muted); margin-top:4px;">
+          Item gets flagged when quantity falls below this number
+        </span>
+      </div>
+
+      <div class="field">
+        <label for="panelDesc">Description</label>
+        <textarea id="panelDesc" rows="3" placeholder="Optional notes…"
+          style="resize:vertical; font-family:'Outfit',sans-serif; font-size:15px;
+                 padding:11px 14px; border:1px solid var(--border); border-radius:8px;
+                 background:var(--bg); color:var(--text); outline:none; width:100%;">
+        </textarea>
+      </div>
+    </div>
+
+    <div class="panel-footer">
+      <button class="btn btn-ghost" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEdit()">Save changes</button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/shared_inventory.js') }}"></script>
+</body>
 </html>
