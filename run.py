@@ -7,11 +7,19 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import CheckConstraint
 from sqlalchemy.exc import IntegrityError
 from flask_migrate import Migrate
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from validators import parse_inventory_payload
 
 load_dotenv()
 app = Flask(__name__)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri="memory://",
+)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
@@ -48,7 +56,6 @@ class Inventory(db.Model):
     restockmin = db.Column(db.Integer)
     restockmax = db.Column(db.Integer)
     description = db.Column(db.Text)
-    category = db.Column(db.String(50))
 
 class SharedInventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -64,6 +71,8 @@ def load_user(user_id):
 
 #Routes
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
+
 def register():
     error = None
     if request.method == "POST":
@@ -88,6 +97,7 @@ def register():
     return render_template("register.html", error=error), 400 if error else 200
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def login():
     error = None
     if request.method == "POST":
