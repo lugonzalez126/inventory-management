@@ -1,50 +1,45 @@
-from flask import Flask
+import os
+from dotenv import load_dotenv
+from flask import Flask, request, redirect, url_for, jsonify, render_template
 from flask_login import LoginManager, UserMixin, login_required, current_user, login_user, logout_user
-from flask import render_template
-from flask import request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-app = Flask(__name__)
-from flask import request, jsonify
 from sqlalchemy import CheckConstraint
 from sqlalchemy.exc import IntegrityError
+from flask_migrate import Migrate
+
 from validators import parse_inventory_payload
 
+load_dotenv()
+app = Flask(__name__)
 
-#1. conifguration boilorplate code
-app.config["SECRET_KEY"] = "dev-only-change-later"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///storage.db"
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-#2. Creating user model
+# Models
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
 class User(UserMixin, db.Model):
-    #creates a unique Identifier columns
     id = db.Column(db.Integer, primary_key=True)  
-    #creates columns username
     username = db.Column(db.String(20), unique=True, nullable=False)
-    #create columns of hashed password
     password_hash = db.Column(db.String(255), nullable=False)
-    #configured method salts and hashed passowrd to be stored
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(
             password,
             method="pbkdf2:sha256",
             salt_length=16
 )
-    # Verify user password using salted hash stored in the database
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
-    #authenticate user
 
-#4. Create Inventory model
 class Inventory(db.Model):
     __table_args__ = (
-        CheckConstraint("length(trim(itemName)) > 0", name="ck_inventory_itemname_not_empty"),
+        CheckConstraint('length(trim("itemName")) > 0', name="ck_inventory_itemname_not_empty"),
     )  
     id = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
@@ -53,7 +48,8 @@ class Inventory(db.Model):
     restockmin = db.Column(db.Integer)
     restockmax = db.Column(db.Integer)
     description = db.Column(db.Text)
-#5. a
+    category = db.Column(db.String(50))
+
 class SharedInventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     ownersID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
@@ -66,29 +62,34 @@ class SharedInventory(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-#3. added routes to login, logout, register
+#Routes
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    error = None
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        if not username or not password:
-            return "Username and Password Required", 400
-        
-        existing = User.query.filter_by(username=username).first()
-        if existing:
-            return "Username already exists", 400
-        
-        u = User(username=username)
-        u.set_password(password)
-        db.session.add(u)
-        db.session.commit()
-        return redirect(url_for("login"))
 
-    return render_template("register.html")
-#5. add routes for basic functionlaity
+        if not username or not password:
+            error = "Username and password are required."
+        elif len(password) < 6:
+            error = "Password must be at least 6 characters."
+        else:
+            existing = User.query.filter_by(username=username).first()
+            if existing:
+                error = "Username already exists. Try another."
+            else:
+                u = User(username=username)
+                u.set_password(password)
+                db.session.add(u)
+                db.session.commit()
+                return redirect(url_for("login"))
+
+    return render_template("register.html", error=error), 400 if error else 200
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    error = None
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
@@ -97,10 +98,11 @@ def login():
         if user and user.check_password(password):
             login_user(user)
             return redirect(url_for("inventory_page"))
+        
+        error = "Incorrect Password or Username. Try Again."
 
-        return "Invalid credentials", 401
 
-    return render_template("login.html")
+    return render_template("login.html", error = error)
 
 @app.route("/logout")
 @login_required
@@ -110,15 +112,15 @@ def logout():
 
 @app.route("/")
 def home():
-    return "Inventory app running"
+    return redirect(url_for("login"))
+
     
 
-@app.route("/whoami")
+@app.route("/api/me")
 @login_required
 def whoami():
-    return f"Logged in as: {current_user.username}"
+    return jsonify({"username": current_user.username}), 200
 
-#7. adding payloads     
 @app.route("/add_row", methods=["POST"])
 @login_required
 def add_row():
@@ -158,7 +160,7 @@ def get_user_inventory():
             "id": item.id,
             "itemName": item.itemName,
             "quantity": item.quantity,
-            "restock": item.restockmin,
+            "restockmin": item.restockmin,
             "description": item.description
         })
 
@@ -206,7 +208,7 @@ def edit_row():
 
     return jsonify({"status": "ok"}), 200
 
-#5.inventory
+
 @app.route("/sharedinv")
 @login_required
 def shared_inventory_page():
@@ -223,13 +225,13 @@ def shared_inventory_page():
         items = Inventory.query.filter_by(userID=share.ownersID).all()
         shared_inventories_data[owner.username] = items
 
-    return render_template("shared_inventory.html", shared_inventories=shared_inventories_data)
-#6 share invenotry
+    return render_template("shared_inventory.html", shared_inventories=shared_inventories_data, username=current_user.username)
+
 @app.route("/share_inv", methods=["POST"])
 @login_required
 def share_inv():
-    data = request.get_json()
-    username_to_share = (data or "").strip()
+    payload = request.get_json() or {}
+    username_to_share = payload.get("username", "").strip()
 
     if not username_to_share:
         return jsonify({"error": "Username required"}), 400
@@ -258,7 +260,7 @@ def share_inv():
 
     return jsonify({"status": "ok"}), 201
 
-#6b edit shared inv
+
 @app.route("/edit_shared_row", methods=["PUT"])
 @login_required
 def edit_shared_row():
@@ -279,7 +281,7 @@ def edit_shared_row():
     if not item:
         return jsonify({"error": "Item not found"}), 404
 
-    # If owner → allow
+    
     if item.userID == current_user.id:
         pass
     else:
@@ -306,6 +308,4 @@ def edit_shared_row():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
