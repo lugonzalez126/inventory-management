@@ -86,12 +86,33 @@ function renderTable(items) {
           onclick="openEditPanel(${item.id}, '${escapeAttr(item.itemName)}', ${item.quantity}, ${item.restockmin ?? 'null'}, '${escapeAttr(item.description || '')}')">
           Edit
         </button>
+        <button class="btn btn-danger" style="font-size:12px; padding:5px 12px;"
+          onclick="deleteRow(${item.id})">
+          Delete
+        </button>
       </td>`;
 
     tbody.appendChild(row);
   });
 }
+// ---- Delete Row ----
+function deleteRow(itemId) {
+  if (!confirm("Delete this item?")) return;
 
+  fetch(`/delete_row/${itemId}`, {
+    method: 'DELETE',
+  })
+  .then(async res => {
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      showMsg('errorMsg', data?.error || 'Failed to delete item.');
+      return;
+    }
+    showMsg('successMsg', 'Item deleted.');
+    loadInventory();
+  })
+  .catch(() => showMsg('errorMsg', 'Network error. Try again.'));
+}
 // ---- Fetch Inventory ----
 
 function loadInventory() {

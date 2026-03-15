@@ -80,3 +80,20 @@ function submitEdit() {
   })
   .catch(() => showPanelError('Network error. Try again.'));
 }
+// ---- Unshare Inventory ----
+
+function unshareUser(sharedID) {
+  if (!confirm("Remove this user's access?")) return;
+
+  fetch(`/unshare_inv/${sharedID}`, { method: 'DELETE' })
+    .then(async res => {
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showMsg('errorMsg', data?.error || 'Failed to remove user.');
+        return;
+      }
+      showMsg('successMsg', 'Access removed.');
+      setTimeout(() => location.reload(), 1000);
+    })
+    .catch(() => showMsg('errorMsg', 'Network error. Try again.'));
+}

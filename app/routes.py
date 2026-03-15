@@ -97,6 +97,30 @@ def add_row():
     return jsonify({"status": "ok", "id": item.id}), 201
 
 
+@main.route("/delete_row/<int:item_id>", methods=["DELETE"])
+@login_required
+def delete_row(item_id):
+
+    item = Inventory.query.get(item_id)
+
+    if item is None:
+        return jsonify({"error": "Item not found"}), 404
+
+    if item.userID != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    db.session.delete(item)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Unable to delete data"}), 400
+
+    return jsonify({"status": "ok"}), 200
+
+
+
+
 @main.route("/getUserInventory", methods=["GET"])
 @login_required
 def get_user_inventory():
@@ -113,6 +137,7 @@ def get_user_inventory():
         })
 
     return jsonify({"user_inventory": inventory_list}), 200
+
 
 @main.route("/inventory")
 @login_required
@@ -156,15 +181,23 @@ def edit_row():
 
     return jsonify({"status": "ok"}), 200
 
-
+#View the shared inventory
 @main.route("/sharedinv")
 @login_required
 def shared_inventory_page():
     currentuserid = current_user.id
     shares = SharedInventory.query.filter_by(sharedID=currentuserid).all()
-
+    myshares = SharedInventory.query.filter_by(ownersID=current_user.id).all()
+    inventory_list = []
+    for item in myshares:
+        user = User.query.get(item.sharedID)
+        inventory_list.append({
+            "id": item.id,
+            "sharedID": item.sharedID,
+            "username": user.username if user else "Unknown",
+            "permissionLevel": item.permissionLevel
+        })
     shared_inventories_data = {}
-
     for share in shares:
         owner = User.query.get(share.ownersID)
         if not owner:
@@ -173,7 +206,9 @@ def shared_inventory_page():
         items = Inventory.query.filter_by(userID=share.ownersID).all()
         shared_inventories_data[owner.username] = items
 
-    return render_template("shared_inventory.html", shared_inventories=shared_inventories_data, username=current_user.username)
+    return render_template("shared_inventory.html", shared_inventories=shared_inventories_data, sharing_with=inventory_list, username=current_user.username)
+
+
 
 @main.route("/share_inv", methods=["POST"])
 @login_required
@@ -203,11 +238,40 @@ def share_inv():
         sharedID=user_to_share.id,
         permissionLevel="Edit"
     )
+
     db.session.add(newshare)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid data"}), 400
 
     return jsonify({"status": "ok"}), 201
 
+
+@main.route("/unshare_inv/<int:sharedID>", methods=["DELETE"])
+@login_required
+def unshare_inv(sharedID):
+
+    unshare = SharedInventory.query.filter_by(
+        ownersID=current_user.id,
+        sharedID=sharedID
+    ).first()
+
+    if not unshare:
+        return jsonify({"error": "Share not found"}), 404
+
+    if unshare.ownersID != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+    
+    db.session.delete(unshare)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid data"}), 400
+
+    return jsonify({"status": "ok"}), 200
 
 @main.route("/edit_shared_row", methods=["PUT"])
 @login_required

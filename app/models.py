@@ -23,7 +23,7 @@ class Inventory(db.Model):
         CheckConstraint('length(trim("itemName")) > 0', name="ck_inventory_itemname_not_empty"),
     )  
     id = db.Column(db.Integer, primary_key=True)
-    userID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    userID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     itemName = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     restockmin = db.Column(db.Integer)
@@ -32,6 +32,6 @@ class Inventory(db.Model):
 
 class SharedInventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    ownersID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    sharedID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    ownersID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    sharedID = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     permissionLevel = db.Column(db.String(20), nullable=False)
