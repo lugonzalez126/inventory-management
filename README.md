@@ -1,3 +1,5 @@
+**Live Demo:** https://inventory-management-production-607b.up.railway.app/login
+
 # Inventory Manager
 
 A multi-user inventory management web app where users can track personal inventory, share it with others, and manage stock levels in real time.
@@ -101,7 +103,7 @@ flask db upgrade
 python run.py
 ```
 
-The app will be running at `http://localhost:5000`
+The app will be running at `https://inventory-management-production-607b.up.railway.app/login`
 
 ---
 
