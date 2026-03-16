@@ -39,7 +39,6 @@ def create_app():
     app.register_blueprint(main)
 
     with app.app_context():
-        from flask_migrate import upgrade
-        upgrade()
+        db.create_all()
 
     return app
