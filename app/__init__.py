@@ -38,4 +38,8 @@ def create_app():
     from app.routes import main
     app.register_blueprint(main)
 
+    with app.app_context():
+        from flask_migrate import upgrade
+        upgrade()
+
     return app
