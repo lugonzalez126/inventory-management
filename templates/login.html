@@ -18,9 +18,9 @@
         Manage your inventory in one place.
       </p>
 
-      <div class="alert alert-error" id="errorMsg">
-        Incorrect username or password. Try again.
-      </div>
+      {% if error %}
+        <div class="alert alert-error show">{{ error }}</div>
+      {% endif %}
 
       <form method="POST">
         <div class="field">

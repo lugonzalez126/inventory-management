@@ -21,7 +21,6 @@
 
   <!-- Page -->
   <div class="page">
-
     <div class="page-header">
       <div>
         <h2>Shared with me</h2>
@@ -108,6 +107,35 @@
       </div>
     {% endfor %}
 
+  <!-- Sharing with others -->
+  <div style="margin-top: 48px;">
+    <div style="margin-bottom: 16px;">
+      <h2>Sharing with others</h2>
+      <p style="margin-top: 4px; font-size: 14px;">People who can see your inventory</p>
+    </div>
+
+    {% if not sharing_with %}
+      <div class="card" style="text-align: center; padding: 40px;">
+        <p style="font-size: 15px;">You haven't shared your inventory with anyone yet.</p>
+      </div>
+    {% else %}
+      <div class="card" style="padding: 8px 0;">
+        {% for share in sharing_with %}
+          <div style="display:flex; align-items:center; justify-content:space-between;
+                      padding: 14px 24px; border-bottom: 1px solid var(--border);">
+            <div>
+              <span style="font-size: 15px; font-weight: 500;">{{ share.username }}</span>
+              <span class="badge" style="margin-left: 8px;">{{ share.permissionLevel }}</span>
+            </div>
+            <button class="btn btn-danger" style="font-size:12px; padding:5px 12px;"
+              onclick="unshareUser({{ share.sharedID }})">
+              Remove
+            </button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
   </div>
 
   <!-- Slide-in Edit Panel -->
